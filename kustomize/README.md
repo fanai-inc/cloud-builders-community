@@ -1,4 +1,4 @@
-# [Helm](https://docs.helm.sh/) tool builder
+# [Kustomize](https://github.com/kubernetes-sigs/kustomize)
 
 ## Using this builder with Google Container Engine
 
@@ -22,36 +22,53 @@ cluster. You can configure the cluster by setting environment variables.
     # Name of GKE cluster
     CLOUDSDK_CONTAINER_CLUSTER=<your cluster's name>
 
-    # (Optional) Project of GKE Cluster, only if you want helm to authenticate
+    # (Optional) Project of GKE Cluster, only if you want kustomize to authenticate
     # to a GKE cluster in another project (requires IAM Service Accounts are properly setup)
     GCLOUD_PROJECT=<destination cluster's GCP project>
 
-Setting the environment variables above will cause this step's `entrypoint` to
+Setting the environment variables above will cause this step's entrypoint to
 first run a command to fetch cluster credentials as follows.
 
     gcloud container clusters get-credentials --zone "$CLOUDSDK_COMPUTE_ZONE" "$CLOUDSDK_CONTAINER_CLUSTER"`
 
-Then, `kubectl` and consequently `helm` will have the configuration needed to talk to your GKE cluster.
+Then, `kubectl` and consequently `kustomize` will have the configuration needed to talk to your GKE cluster.
+
+## Applying the build
+
+The default entrypoint will automatically apply your build via `kubectl apply -f -` if you set the env `APPLY=true`. Thus, you can run:
+
+```yaml
+- id: deploy
+  name: 'gcr.io/$PROJECT_ID/kustomize'
+  args:
+  - 'build'
+  - 'overlays/prod'
+  env:
+    - 'APPLY=true'
+    - 'CLOUDSDK_COMPUTE_ZONE=us-west1'
+    - 'CLOUDSDK_CONTAINER_CLUSTER=tf-k8s'
+    - 'GCLOUD_PROJECT=compound-dev'
+```
+
+To apply the build yourself, you can use a custom entrypoint, e.g.
+
+```yaml
+- id: deploy
+  name: 'gcr.io/$PROJECT_ID/kustomize'
+  entrypoint: bash
+  args:
+  - '-c'
+  - |
+    gcloud container clusters get-credentials --zone "$$CLOUDSDK_COMPUTE_ZONE" "$$CLOUDSDK_CONTAINER_CLUSTER"
+    kustomize build "overlays/prod" | kubectl apply -f -  
+  env:
+    - 'CLOUDSDK_COMPUTE_ZONE=us-west1'
+    - 'CLOUDSDK_CONTAINER_CLUSTER=tf-k8s'
+    - 'GCLOUD_PROJECT=compound-dev'
+```
 
 ## Building this builder
 
 To build this builder, run the following command in this directory.
 
     $ gcloud builds submit . --config=cloudbuild.yaml
-
-## Using Helm
-
-This builder supports two install options of Helm:
-* The default one when the `tiller` gets installed into your GKE cluster (oh all those `tiller` security issues)
-* `Tillerless Helm`, I wrote a [blog post](https://rimusz.net/tillerless-helm/) of using Helm local [tiller plugin](https://github.com/rimusz/helm-tiller) which solves all those `tiller` security issues, as `tiller` runs outside the GKE cluster.
-
-Check the [examples](examples) folder for examples of using both Helm install options in `Cloud Build` pipelines.
-
-You can test e.g. installing a chart via `Tillerless Helm`, running the following command.
-**Note:** Do not forget to update `zone` and GKE `cluster` settings in the `cloudbuild.yaml` files.
-
-    $ gcloud builds submit . --config=examples/chart-install-tillerless/cloudbuild.yaml
-
-And to list Helm releases.
-
-    $ gcloud builds submit . --config=examples/releases-list-tillerless/cloudbuild.yaml

@@ -32,30 +32,16 @@ EOF
     fi
 fi
 
-echo "Running: helm init --client-only"
-helm init --client-only
-
-# check if repo values provided then add that repo
-if [[ -n $HELM_REPO_NAME && -n $HELM_REPO_URL ]]; then
-  echo "Adding chart helm repo $HELM_REPO_URL "
-  helm repo add $HELM_REPO_NAME $HELM_REPO_URL
-fi
-
-echo "Running: helm repo update"
-helm repo update
-
-# check if Tillerless value 'TILLERLESS=true' is provided then install the plugin
-# and run "helm tiller run $@"
-if [ "$TILLERLESS" = true ]; then
-  echo "Installing Tillerless plugin"
-  helm plugin install https://github.com/rimusz/helm-tiller
+if [ "$APPLY" = true ]; then
   if [ "$DEBUG" = true ]; then
-      echo "Running: helm tiller run $@"
+    echo "Running: kustomize $@ | kubectl apply -f -"
   fi
-  helm tiller run "$@"
+
+  kustomize "$@" | kubectl apply -f -
 else
   if [ "$DEBUG" = true ]; then
-      echo "Running: helm $@"
+    echo "Running: kustomize $@"
   fi
-  helm "$@"
+
+  kustomize "$@"
 fi
